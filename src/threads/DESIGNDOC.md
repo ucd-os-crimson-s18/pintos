@@ -1,13 +1,12 @@
-# Pintos
+# Pintos Project 1: Threads
 
 
-# Project 1: Threads
+## DESIGN DOCUMENT
 
 
-# DESIGN DOCUMENT
 
+### TEAM CRIMSON
 
-## TEAM CRIMSON
 
 Nikki Yesalusky  <NIKKI.YESALUSKY@UCDENVER.EDU>
 
@@ -15,17 +14,34 @@ Eric Holguin     <ERIC.HOLGUIN@UCDENVER.EDU>
 
 Jeff Mcmillan    <JEFF.MCMILLAN@UCDENVER.EDU>
 
-### PRELIMINARIES
->> If you have any preliminary comments on your submission, notes for
->> the TAs, or extra credit, please give them here.
-(This is a sample design document.)
->> Please cite any offline or online sources you consulted while
->> preparing your submission, other than the Pintos documentation,
->> course text, and lecture notes.
-
 
 ## ALARM CLOCK
 
+Re-implement `timer_sleep()`, defined in `devices/timer.c`.
+Although a working implementation is provided, it *busy waits*, that is, it spins in a loop checking the current time and calling `thread_yield()` until enough time has gone by.
+Re-implement it to avoid busy waiting.
+
+`void timer_sleep (int64 t ticks) [Function]`
+Suspends execution of the calling thread until time has advanced by at least
+*x* timer ticks. Unless the system is otherwise idle, the thread need not wake up after
+exactly x ticks. Just put it on the ready queue after they have waited for the right
+amount of time.
+`timer_sleep()` is useful for threads that operate in real-time, e.g. for blinking the
+cursor once per second.
+The argument to `timer_sleep()` is expressed in timer ticks, not in milliseconds or
+any another unit. There are `TIMER_FREQ` timer ticks per second, where `TIMER_FREQ` is
+a macro defined in `devices/timer.h`. The default value is 100. We don’t recommend
+changing this value, because any change is likely to cause many of the tests to fail.
+Separate functions `timer_msleep()`, `timer_usleep()`, and `timer_nsleep()` do exist for
+sleeping a specific number of milliseconds, microseconds, or nanoseconds, respectively, but
+these will call `timer_sleep()` automatically when necessary. You do not need to modify
+them.
+
+If your delays seem too short or too long, reread the explanation of the ‘-r’ option to
+pintos (see Section 1.1.4 [Debugging versus Testing], page 4).
+
+The alarm clock implementation is not needed for later projects, although it could be
+useful for project 4.
 
 ### DATA STRUCTURES
 
