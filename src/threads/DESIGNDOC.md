@@ -1,117 +1,153 @@
-D.1 Sample Assignment
-
-Implement thread_join().
-void thread_join (tid t tid) [Function]
-Blocks the current thread until thread tid exits. If A is the running thread and B is
-the argument, then we say that “A joins B.”
-Incidentally, the argument is a thread id, instead of a thread pointer, because a thread
-pointer is not unique over time. That is, when a thread dies, its memory may be,
-whether immediately or much later, reused for another thread. If thread A over time
-had two children B and C that were stored at the same address, then thread_join(B)
-and thread_join(C) would be ambiguous.
-A thread may only join its immediate children. Calling thread_join() on a thread
-that is not the caller’s child should cause the caller to return immediately. Children
-are not “inherited,” that is, if A has child B and B has child C, then A always returns
-immediately should it try to join C, even if B is dead.
-A thread need not ever be joined. Your solution should properly free all of a thread’s
-resources, including its struct thread, whether it is ever joined or not, and regardless
-of whether the child exits before or after its parent. That is, a thread should be freed
-exactly once in all cases.
-Joining a given thread is idempotent. That is, joining a thread multiple times is
-equivalent to joining it once, because it has already exited at the time of the later
-joins. Thus, joins on a given thread after the first should return immediately.
-You must handle all the ways a join can occur: nested joins (A joins B, then B joins
-C), multiple joins (A joins B, then A joins C), and so on.
-
-D.2 Sample Design Document
-+-----------------+
-| CS 140 |
-| SAMPLE PROJECT |
-| DESIGN DOCUMENT |
-+-----------------+
-
----- GROUP ----
-
-Ben Pfaff <blp@stanford.edu>
+# Pintos
+# Project 1: Threads
+# DESIGN DOCUMENT
 
 
----- PRELIMINARIES ----
-Appendix D: Project Documentation 100
+## TEAM CRIMSON
+
+Nikki Yesalusky  <NIKKI.YESALUSKY@UCDENVER.EDU>
+Eric Holguin     <ERIC.HOLGUIN@UCDENVER.EDU>
+Jeff Mcmillan    <JEFF.MCMILLAN@UCDENVER.EDU>
+
+### PRELIMINARIES
 >> If you have any preliminary comments on your submission, notes for
 >> the TAs, or extra credit, please give them here.
 (This is a sample design document.)
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation,
 >> course text, and lecture notes.
-None.
-JOIN
-====
 
 
----- DATA STRUCTURES ----
->> Copy here the declaration of each new or changed ‘struct’ or ‘struct’
->> member, global or static variable, ‘typedef’, or enumeration.
->> Identify the purpose of each in 25 words or less.
-A "latch" is a new synchronization primitive. Acquires block
-until the first release. Afterward, all ongoing and future
-acquires pass immediately.
-/* Latch. */
-struct latch
-{
-bool released; /* Released yet? */
-struct lock monitor_lock; /* Monitor lock. */
-struct condition rel_cond; /* Signaled when released. */
-};
-Added to struct thread:
-/* Members for implementing thread_join(). */
-struct latch ready_to_die; /* Release when thread about to die. */
-struct semaphore can_die; /* Up when thread allowed to die. */
-struct list children; /* List of child threads. */
-list_elem children_elem; /* Element of ‘children’ list. */
+##			     ALARM CLOCK
+##			     ===========
 
 
----- ALGORITHMS ----
->> Briefly describe your implementation of thread_join() and how it
->> interacts with thread termination.
-thread_join() finds the joined child on the thread’s list of
-children and waits for the child to exit by acquiring the child’s
-Appendix D: Project Documentation 101
-ready_to_die latch. When thread_exit() is called, the thread
-releases its ready_to_die latch, allowing the parent to continue.
+### ---- DATA STRUCTURES ----
 
+A1: Copy here the declaration of each new or changed struct or
+    struct member, global or static variable, typedef, or
+     enumeration.  Identify the purpose of each in 25 words or less.
 
----- SYNCHRONIZATION ----
->> Consider parent thread P with child thread C. How do you ensure
->> proper synchronization and avoid race conditions when P calls wait(C)
->> before C exits? After C exits? How do you ensure that all resources
->> are freed in each case? How about when P terminates without waiting,
->> before C exits? After C exits? Are there any special cases?
-C waits in thread_exit() for P to die before it finishes its own
-exit, using the can_die semaphore "down"ed by C and "up"ed by P as
-it exits. Regardless of whether whether C has terminated, there
-is no race on wait(C), because C waits for P’s permission before
-it frees itself.
-Regardless of whether P waits for C, P still "up"s C’s can_die
-semaphore when P dies, so C will always be freed. (However,
-freeing C’s resources is delayed until P’s death.)
-The initial thread is a special case because it has no parent to
-wait for it or to "up" its can_die semaphore. Therefore, its
-can_die semaphore is initialized to 1.
+### ---- ALGORITHMS ----
 
+>> A2: Briefly describe what happens in a call to timer_sleep(),
+>> including the effects of the timer interrupt handler.
 
----- RATIONALE ----
->> Critique your design, pointing out advantages and disadvantages in
->> your design choices.
-This design has the advantage of simplicity. Encapsulating most
-of the synchronization logic into a new "latch" structure
-abstracts what little complexity there is into a separate layer,
-making the design easier to reason about. Also, all the new data
-members are in ‘struct thread’, with no need for any extra dynamic
-allocation, etc., that would require extra management code.
-On the other hand, this design is wasteful in that a child thread
-cannot free itself before its parent has terminated. A parent
-thread that creates a large number of short-lived child threads
-could unnecessarily exhaust kernel memory. This is probably
-acceptable for implementing kernel threads, but it may be a bad
-idea for use with user processes because of the larger number of
-resources that user processes tend to own.
+>> A3: What steps are taken to minimize the amount of time spent in
+>> the timer interrupt handler?
+
+### ---- SYNCHRONIZATION ----
+
+>> A4: How are race conditions avoided when multiple threads call
+>> timer_sleep() simultaneously?
+
+>> A5: How are race conditions avoided when a timer interrupt occurs
+>> during a call to timer_sleep()?
+
+### ---- RATIONALE ----
+
+>> A6: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+##			 PRIORITY SCHEDULING
+##			 ===================
+
+### ---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed struct or
+>> struct member, global or static variable, typedef, or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+>> B2: Explain the data structure used to track priority donation.
+>> Use ASCII art to diagram a nested donation.  (Alternately, submit a
+>> .png file.)
+
+### ---- ALGORITHMS ----
+
+>> B3: How do you ensure that the highest priority thread waiting for
+>> a lock, semaphore, or condition variable wakes up first?
+
+>> B4: Describe the sequence of events when a call to lock_acquire()
+>> causes a priority donation.  How is nested donation handled?
+
+>> B5: Describe the sequence of events when lock_release() is called
+>> on a lock that a higher-priority thread is waiting for.
+
+### ---- SYNCHRONIZATION ----
+
+>> B6: Describe a potential race in thread_set_priority() and explain
+>> how your implementation avoids it.  Can you use a lock to avoid
+>> this race?
+
+### ---- RATIONALE ----
+
+>> B7: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+##			  ADVANCED SCHEDULER
+##			  ==================
+
+### ---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed struct or
+>> struct member, global or static variable, typedef, or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+### ---- ALGORITHMS ----
+
+>> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
+>> has a recent_cpu value of 0.  Fill in the table below showing the
+>> scheduling decision and the priority and recent_cpu values for each
+>> thread after each given number of timer ticks:
+
+timer  recent_cpu    priority   thread
+ticks   A   B   C   A   B   C   to run
+-----  --  --  --  --  --  --   ------
+ 0
+ 4
+ 8
+12
+16
+20
+24
+28
+32
+36
+
+>> C3: Did any ambiguities in the scheduler specification make values
+>> in the table uncertain?  If so, what rule did you use to resolve
+>> them?  Does this match the behavior of your scheduler?
+
+>> C4: How is the way you divided the cost of scheduling between code
+>> inside and outside interrupt context likely to affect performance?
+
+### ---- RATIONALE ----
+
+>> C5: Briefly critique your design, pointing out advantages and
+>> disadvantages in your design choices.  If you were to have extra
+>> time to work on this part of the project, how might you choose to
+>> refine or improve your design?
+
+##			   SURVEY QUESTIONS
+##			   ================
+
+Answering these questions is optional, but it will help us improve the
+course in future quarters.  Feel free to tell us anything you
+want--these questions are just to spur your thoughts.  You may also
+choose to respond anonymously in the course evaluations at the end of
+the quarter.
+
+>> In your opinion, was this assignment, or any one of the three problems
+>> in it, too easy or too hard?  Did it take too long or too little time?
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+
+>> Do you have any suggestions for the TAs to more effectively assist
+>> students, either for future quarters or the remaining projects?
+
+>> Any other comments?
