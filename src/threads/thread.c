@@ -94,7 +94,7 @@ bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED
   struct thread *thread_A = list_entry (A, struct thread, elem);
   struct thread *thread_B = list_entry (B, struct thread, elem);
 
-  return thread_A->priority < thread_B->priority;
+  return thread_A->priority > thread_B->priority;
 }
 /*---------------------------------------------------------------------------------------------*/
 
@@ -317,13 +317,20 @@ thread_unblock (struct thread *t)
   list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL); /* Insert thread into ready list in order */
   t->status = THREAD_READY; /* Change status to ready */
 
-  struct list_elem *list = list_begin(&ready_list); /* Declare a list element */
+  //struct list_elem *list = list_begin(&ready_list); /* Declare a list element */
 
-  struct thread *t1 = list_entry (list, struct thread, elem); /* Get the thread from the ready_list*/
+  //struct thread *curr = list_entry (list, struct thread, elem); /* Get the thread from the ready_list*/
 
-  if(t->priority > t1->priority) /* Check if the priority is greater then current thread */
+  //struct thread *curr = thread_current();
+
+  if(thread_current() != idle_thread)
   {
-    thread_yield();
+    int curr_priority = thread_get_priority();
+
+    if(t->priority > curr_priority) /* Check if the priority is greater then current thread */
+    {
+      thread_yield();
+    }
   }
   /*---------------------------------------------------------------------------------------------*/
 
@@ -424,21 +431,21 @@ void
 thread_set_priority (int new_priority)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-  struct thread *curr = thread_current(); /* Temprorary thread set to the current thread */
 
   struct list_elem *list = list_begin(&ready_list); /* Declare a list element */
 
   struct thread *t = list_entry (list, struct thread, elem); /* Get the thread from the ready list */
 
-  /* Checking if the thread has the highest priority */
-  if(!(curr->priority == t->priority)) 
+  thread_current ()->priority = new_priority; /* Sets current thread's priority to new priority */
+
+  int curr_priority = thread_get_priority();
+
+  /* Checking if current thread no longer has the highest priority */
+  if(t->priority > curr_priority) 
   {
     thread_yield();
   }
-
   /*---------------------------------------------------------------------------------------------*/
-
-  thread_current ()->priority = new_priority; /* Sets current thread's priority to new priority */
 }
 
 /* Returns the current thread's priority. */
