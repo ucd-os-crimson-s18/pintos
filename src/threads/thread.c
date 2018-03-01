@@ -1,5 +1,8 @@
 #include "threads/thread.h"
-#include "threads/fixed_point.h"
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+#include "threads/fixed-point.h"
+#include "devices/timer.h"
+  /*---------------------------------------------------------------------------------------------*/
 #include <debug.h>
 #include <stddef.h>
 #include <random.h>
@@ -29,6 +32,12 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+/* List of all threads in THREAD_BLOCKED state, waiting to be
+ * awakened by the interrupt handler */
+extern struct list blocked_list;
+/*---------------------------------------------------------------------------------------------*/
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -55,6 +64,12 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+static fixed_point_t load_avg;
+static size_t ready_threads;
+/*---------------------------------------------------------------------------------------------*/
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -71,6 +86,17 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+
+/* list_less function used to compare the thread's priority when inserting/sorting */
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED)
+{
+  struct thread *thread_A = list_entry (A, struct thread, elem);
+  struct thread *thread_B = list_entry (B, struct thread, elem);
+
+  return thread_A->priority < thread_B->priority;
+}
+/*---------------------------------------------------------------------------------------------*/
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -106,7 +132,7 @@ thread_init (void)
 void
 thread_start (void)
 {
-  /* Create the idle thread. */
+  /* Create the idle thread.1 */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
@@ -134,6 +160,53 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+
+
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+  if(thread_mlfqs)
+  {
+      /* LOAD AVG Calculation */
+      if((timer_ticks() % TIMER_FREQ) == 0)
+      {
+        ready_threads = list_size(&ready_list);
+
+        fixed_point_t product1 = mult_fixed_pt_int(load_avg, (59/60));
+
+        int product2 = (1/60) * ready_threads;
+
+        load_avg =  add_fixed_pt_int(product1, product2); 
+      }
+
+      /* RECENT CPU Calculation */
+      if((timer_ticks() % TIMER_FREQ) == 0)
+      {
+        fixed_point_t product1 = mult_fixed_pt_int(load_avg, 2);
+
+        fixed_point_t sum1 = add_fixed_pt_int(product1, 1);
+
+        fixed_point_t quotient = div_fixed_pts(product1, sum1);
+
+        fixed_point_t sum2 = add_fixed_pt_int(thread_current()->recent_cpu, thread_current()->nice);
+
+        fixed_point_t result = mult_fixed_pts(quotient, sum2);
+
+        thread_current()->recent_cpu = result;
+      }
+
+      /* PRIORITY Calculation */
+      /* Calculated every 4th Clock tick... */
+      fixed_point_t quotient = div_fixed_pt_int(thread_current()->recent_cpu, 4);
+
+      int product = thread_current()->nice * 2;
+
+      fixed_point_t difference1 = sub_fixed_pt_int(quotient, PRI_MAX);
+
+      fixed_point_t difference2 = sub_fixed_pt_int(difference1, product);
+
+      thread_current()->priority = convert_fixed_pt_nearest(difference2);
+  }
+  /*---------------------------------------------------------------------------------------------*/
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -218,6 +291,7 @@ thread_block (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   thread_current ()->status = THREAD_BLOCKED;
+
   schedule ();
 }
 
@@ -238,8 +312,21 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
-  t->status = THREAD_READY;
+
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+  list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL); /* Insert thread into ready list in order */
+  t->status = THREAD_READY; /* Change status to ready */
+
+  struct list_elem *list = list_begin(&ready_list); /* Declare a list element */
+
+  struct thread *t1 = list_entry (list, struct thread, elem); /* Get the thread from the ready_list*/
+
+  if(t->priority > t1->priority) /* Check if the priority is greater then current thread */
+  {
+    thread_yield();
+  }
+  /*---------------------------------------------------------------------------------------------*/
+
   intr_set_level (old_level);
 }
 
@@ -309,7 +396,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread)
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, compare_priority, NULL); /* Insert thread into ready list in order */
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -336,36 +423,56 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority)
 {
-  thread_current ()->priority = new_priority;
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+  struct thread *curr = thread_current(); /* Temprorary thread set to the current thread */
+
+  struct list_elem *list = list_begin(&ready_list); /* Declare a list element */
+
+  struct thread *t = list_entry (list, struct thread, elem); /* Get the thread from the ready list */
+
+  /* Checking if the thread has the highest priority */
+  if(!(curr->priority == t->priority)) 
+  {
+    thread_yield();
+  }
+
+  /*---------------------------------------------------------------------------------------------*/
+
+  thread_current ()->priority = new_priority; /* Sets current thread's priority to new priority */
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void)
 {
-  return thread_current ()->priority;
+  return thread_current ()->priority; /* return thread's priority */
 }
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED)
+thread_set_nice (int new_nice)
 {
-  // Nothing yet
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+  thread_current()->nice = new_nice;
+
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void)
 {
-  //return thread_current ()->nice;
-  return 0;
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+  return (thread_current ()->nice);
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void)
 {
-  /* Not yet implemented. */
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------
+
+  return  convert_fixed_pt_nearest(mult_fixed_pt_int(load_avg, 100));*/
+
   return 0;
 }
 
@@ -373,7 +480,10 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void)
 {
-  /* Not yet implemented. */
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------
+
+  return convert_fixed_pt_nearest(mult_fixed_pt_int((thread_current()->recent_cpu) * 100)) ;*/
+
   return 0;
 }
 
@@ -464,6 +574,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+  sema_init (&t->thread_sema, 0); /* initialize the thread semaphore to 0 */
+/*---------------------------------------------------------------------------------------------*/
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

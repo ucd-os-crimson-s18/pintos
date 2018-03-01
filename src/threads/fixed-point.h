@@ -1,96 +1,117 @@
 /* FIXED POINT REAL ARITHMETIC*/
 /* Using APPENDIX B: 4.4 BSD SCHEDULER PAGE 95*/
+/* CRIMSON TEAM */
 
 #ifndef THREADS_FIXED_POINT_H
 #define THREADS_FIXED_POINT_H
 
-#define P = 17;
-#define Q = 14;
-#define F = 1 << Q;
+
+#define P 17
+#define Q 14
+#define F (1 << Q) 
+
+typedef struct
+{
+
+  int value;
+
+}fixed_point_t;
+
+
+/* Return fixed point value */
+static inline fixed_point_t
+fixed_point (int n)
+{
+  fixed_point_t fx_pt;
+
+  fx_pt.value = n;
+  
+  return fx_pt;
+}
 
 /* Convert n to fixed point: */
-int
-convert_int(int n)
+static inline fixed_point_t
+convert_int (int n)
 {
-  return (n * F);
+  return fixed_point (n * F);
 }
 
 /* Convert x to integer (rounding toward zero): */
-int
-convert_fixed_pt(int x)
+static inline int
+convert_fixed_pt (fixed_point_t x)
 {
-  return (x / F);
+  return (x.value / F);
 }
 
-/* Convert x to intger (rounding to nearest); */
-int
-convert_fixed_pt_nearest(int x)
+/* Convert x to integer (rounding to nearest integer); */
+static inline int
+convert_fixed_pt_nearest (fixed_point_t x)
 {
-  if(x >= 0)
+  if(x.value >= 0)
   {
-    return ((x + F / 2) / F);
+    return ((x.value + F / 2) / F);
   }
 
-  if(x <= 0)
+  if(x.value <= 0)
   {
-    return ((x - F / 2) / F);
+    return ((x.value - F / 2) / F);
   }
 }
 
 /* Add x and y */
-int
-add_fixed_pts(int x, int y)
+static inline fixed_point_t
+add_fixed_pts (fixed_point_t x, fixed_point_t y)
 {
-  return (x + y);
+  return fixed_point(x.value + y.value);
 }
 
 /* Subtract x and y */
-int
-sub_fixed_pts(int x, int y)
+static inline fixed_point_t
+sub_fixed_pts (fixed_point_t x, fixed_point_t y)
 {
-  return (x - y);
+  return fixed_point(x.value - y.value);
 }
 
 /* Add x and n */
-int
-add_fixed_pt_int(int x, int n)
+static inline fixed_point_t
+add_fixed_pt_int (fixed_point_t x, int n)
 {
-  return (x + n * F);
+  return fixed_point(x.value + n * F);
 }
 
 /* Subtract n from x */
-int
-sub_fixed_pt_int(int x, int n)
+static inline fixed_point_t
+sub_fixed_pt_int (fixed_point_t x, int n)
 {
-  return (x - n * F);
+  return fixed_point(x.value - n * F);
 }
 
 /* Multiply x by y */
-int
-mult_fixed_pts(int x, int y)
+static inline fixed_point_t
+mult_fixed_pts (fixed_point_t x, fixed_point_t y)
 {
-  return (((int64_t)x) * y / F);
+  return fixed_point((long long) x.value * y.value / F);
 }
 
 /* Multiply x by n */
-int
-mult_fixed_pt_int(int x, int y)
+static inline fixed_point_t
+mult_fixed_pt_int (fixed_point_t x, int n)
 {
-  return (x * n);
+  return fixed_point(x.value * n);
 }
 
 /* Divide x by y */
-int
-div_fixed_pts(int x, int y)
+static inline fixed_point_t
+div_fixed_pts (fixed_point_t x, fixed_point_t y)
 {
-  return (((int64_t)x) * F / y);
+  return fixed_point((long long) x.value * F / y.value);
 }
 
 /* Divide x by n */
-int
-div_fixed_pt_int(int x, int y)
+static inline fixed_point_t
+div_fixed_pt_int (fixed_point_t x, int n)
 {
-  return (x / n);
+  return fixed_point(x.value / n);
 }
 
 #endif /* threads/fixed-point.h */
