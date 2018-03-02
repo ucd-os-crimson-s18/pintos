@@ -32,12 +32,6 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
-/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-/* List of all threads in THREAD_BLOCKED state, waiting to be
- * awakened by the interrupt handler */
-extern struct list blocked_list;
-/*---------------------------------------------------------------------------------------------*/
-
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -161,7 +155,9 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-
+  /* Enforce preemption. */
+  if (++thread_ticks >= TIME_SLICE)
+    intr_yield_on_return ();
 
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
   if(thread_mlfqs)
@@ -208,9 +204,6 @@ thread_tick (void)
   }
   /*---------------------------------------------------------------------------------------------*/
 
-  /* Enforce preemption. */
-  if (++thread_ticks >= TIME_SLICE)
-    intr_yield_on_return ();
 }
 
 /* Prints thread statistics. */
@@ -317,19 +310,13 @@ thread_unblock (struct thread *t)
   list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL); /* Insert thread into ready list in order */
   t->status = THREAD_READY; /* Change status to ready */
 
-  //struct list_elem *list = list_begin(&ready_list); /* Declare a list element */
-
-  //struct thread *curr = list_entry (list, struct thread, elem); /* Get the thread from the ready_list*/
-
-  //struct thread *curr = thread_current();
-
-  if(thread_current() != idle_thread)
+  if(thread_current() != idle_thread) /* Checking that current thread isnt the idle thread */
   {
-    int curr_priority = thread_get_priority();
+    int curr_priority = thread_get_priority(); /* Get the current thread's priority */
 
     if(t->priority > curr_priority) /* Check if the priority is greater then current thread */
     {
-      thread_yield();
+      thread_yield(); /* Current thread must yield */
     }
   }
   /*---------------------------------------------------------------------------------------------*/
@@ -438,12 +425,12 @@ thread_set_priority (int new_priority)
 
   thread_current ()->priority = new_priority; /* Sets current thread's priority to new priority */
 
-  int curr_priority = thread_get_priority();
+  int curr_priority = thread_get_priority(); /* Get the current thread's priority */
 
   /* Checking if current thread no longer has the highest priority */
   if(t->priority > curr_priority) 
   {
-    thread_yield();
+    thread_yield(); /* Current thread must yield */
   }
   /*---------------------------------------------------------------------------------------------*/
 }
@@ -476,22 +463,19 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void)
 {
-  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 
-  return  convert_fixed_pt_nearest(mult_fixed_pt_int(load_avg, 100));*/
-
-  return 0;
+  return  convert_fixed_pt_nearest(mult_fixed_pt_int(load_avg, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void)
 {
-  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------
+  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 
-  return convert_fixed_pt_nearest(mult_fixed_pt_int((thread_current()->recent_cpu) * 100)) ;*/
+  return convert_fixed_pt_nearest(mult_fixed_pt_int((thread_current()->recent_cpu), 100));
 
-  return 0;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.

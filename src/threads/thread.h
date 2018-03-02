@@ -125,6 +125,14 @@ struct thread
 extern bool thread_mlfqs;
 
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+/* List of all threads in THREAD_BLOCKED state, waiting to be
+ * awakened by the interrupt handler */
+//extern struct list blocked_list;
+/*---------------------------------------------------------------------------------------------*/
+
+extern struct list blocked_list; /* Declare blocked_list to store blocked threads */
+
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 /* list less style function to use for priority comparison */
 bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED);
 /*---------------------------------------------------------------------------------------------*/
