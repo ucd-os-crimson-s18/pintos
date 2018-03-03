@@ -60,7 +60,10 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+static fixed_point_t load_avg; /* Declare load avg for mlfqs calculations */
+
 static size_t ready_threads;  /* Declare ready threads for mlfqs calculations */
+
 /*---------------------------------------------------------------------------------------------*/
 
 /* If false (default), use round-robin scheduler.
@@ -79,24 +82,6 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-
-/* list_less function used to compare the thread's priority when inserting/sorting */
-/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED)
-{
-  struct thread *thread_A = list_entry (A, struct thread, elem);
-  struct thread *thread_B = list_entry (B, struct thread, elem);
-
-  if(thread_A->priority > thread_B->priority)
-  {
-    return true;
-  }
-  else 
-  {
-    return false;
-  }
-}
-/*---------------------------------------------------------------------------------------------*/
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -140,6 +125,8 @@ thread_start (void)
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
+  load_avg = fixed_point(0);
+
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
 }
@@ -149,6 +136,39 @@ thread_start (void)
 void
 thread_tick (void)
 {
+    /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+  if(thread_mlfqs)
+  {
+      increment_recent_cpu();
+
+      /* LOAD AVG Calculation */
+      if((timer_ticks() % TIMER_FREQ) == 0)
+      {
+        calculate_load_avg();
+      }
+
+      /* RECENT CPU Calculation */
+      if((timer_ticks() % TIMER_FREQ) == 0)
+      {
+        enum intr_level old_level = intr_disable ();
+        thread_foreach(calculate_recent_cpu, NULL);
+        intr_set_level (old_level); /* reset interrupt */
+      }
+
+      increment_recent_cpu();
+
+      /* PRIORITY Calculation */
+      /* Calculated every 4th Clock tick... */
+      if((timer_ticks() % 4) == 0)
+      {
+        calculate_priority();
+      }
+
+
+  }
+  /*---------------------------------------------------------------------------------------------*/
+
+
   struct thread *t = thread_current ();
 
   /* Update statistics. */
@@ -164,60 +184,6 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
-
-  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-  if(thread_mlfqs)
-  {
-      /* LOAD AVG Calculation */
-      if((timer_ticks() % TIMER_FREQ) == 0)
-      {
-        ready_threads = list_size(&ready_list);
-
-        if(thread_current != idle_thread)
-        {
-          ready_threads += 1;
-        }
-
-        fixed_point_t quotient = div_fixed_pts(convert_int(59), convert_int(60));
-
-        fixed_point_t product1 = mult_fixed_pts(load_avg, quotient);
-
-        fixed_point_t quotient2 = div_fixed_pts(convert_int(1), convert_int(60));
-
-        fixed_point_t product2 = mult_fixed_pt_int(quotient2, ready_threads);
-
-        load_avg =  add_fixed_pts(product1, product2); 
-      }
-
-      /* RECENT CPU Calculation */
-      if((timer_ticks() % TIMER_FREQ) == 0)
-      {
-        fixed_point_t product1 = mult_fixed_pt_int(load_avg, 2);
-
-        fixed_point_t sum1 = add_fixed_pt_int(product1, 1);
-
-        fixed_point_t quotient = div_fixed_pts(product1, sum1);
-
-        fixed_point_t sum2 = add_fixed_pt_int(thread_current()->recent_cpu, thread_current()->nice);
-
-        fixed_point_t result = mult_fixed_pts(quotient, sum2);
-
-        thread_current()->recent_cpu = result;
-      }
-
-      /* PRIORITY Calculation */
-      /* Calculated every 4th Clock tick... */
-      fixed_point_t quotient = div_fixed_pt_int(thread_current()->recent_cpu, 4);
-
-      int product = thread_current()->nice * 2;
-
-      fixed_point_t difference1 = sub_fixed_pt_int(quotient, PRI_MAX);
-
-      fixed_point_t difference2 = sub_fixed_pt_int(difference1, product);
-
-      thread_current()->priority = convert_fixed_pt_nearest(difference2);
-  }
-  /*---------------------------------------------------------------------------------------------*/
 
 }
 
@@ -432,6 +398,11 @@ thread_set_priority (int new_priority)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 
+  if (thread_mlfqs)
+  {
+    return;
+  }
+  
   enum intr_level old_level = intr_disable (); /* Disable interrupts */
 
   thread_current ()->priority = new_priority; /* Sets current thread's priority to new priority */
@@ -451,7 +422,7 @@ thread_get_priority (void)
 
   return thread_current ()->priority; /* return thread's priority */
 
-    intr_set_level (old_level); /* reset interrupt */
+  intr_set_level (old_level); /* reset interrupt */
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -459,8 +430,15 @@ void
 thread_set_nice (int new_nice)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-  thread_current()->nice = new_nice;
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
 
+  thread_current ()->nice = new_nice;
+
+  calculate_priority();
+
+  check_priority();
+
+  intr_set_level (old_level); /* reset interrupt */
 }
 
 /* Returns the current thread's nice value. */
@@ -468,7 +446,13 @@ int
 thread_get_nice (void)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-  return (thread_current ()->nice);
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
+
+  int nice = thread_current ()->nice;
+
+  intr_set_level (old_level); /* reset interrupt */
+
+  return nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -476,7 +460,14 @@ int
 thread_get_load_avg (void)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-  return  convert_fixed_pt_nearest(mult_fixed_pt_int(load_avg, 100));
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
+
+  int load_avg_rounded = convert_fixed_pt_nearest(mult_fixed_pt_int(load_avg, 100));
+
+  intr_set_level (old_level); /* reset interrupt */
+
+  return load_avg_rounded;
+
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -484,7 +475,14 @@ int
 thread_get_recent_cpu (void)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-  return convert_fixed_pt_nearest(mult_fixed_pt_int((thread_current()->recent_cpu), 100));
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
+
+  int recent_cpu_rounded = convert_fixed_pt_nearest(mult_fixed_pt_int((thread_current()->recent_cpu), 100));
+
+  intr_set_level (old_level); /* reset interrupt */
+
+  return recent_cpu_rounded;
+
 
 }
 
@@ -579,7 +577,7 @@ init_thread (struct thread *t, const char *name, int priority)
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
   sema_init (&t->thread_sema, 0); /* initialize the thread semaphore to 0 */
   t->nice = NICE_DEFAULT; /* initialize nice */
-  //t->recent_cpu = 0;  /* initialize recent cpu */
+  t->recent_cpu = fixed_point(0);  /* initialize recent cpu */
 /*---------------------------------------------------------------------------------------------*/
 
   old_level = intr_disable ();
@@ -702,6 +700,22 @@ allocate_tid (void)
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+/* list_less function used to compare the thread's priority when inserting/sorting */
+bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED)
+{
+  struct thread *thread_A = list_entry (A, struct thread, elem);
+  struct thread *thread_B = list_entry (B, struct thread, elem);
+
+  if(thread_A->priority > thread_B->priority)
+  {
+    return true;
+  }
+  else 
+  {
+    return false;
+  }
+}
+
 void check_priority(void)
 {
   if(thread_current() != idle_thread) /* Checking that current thread isnt the idle thread */
@@ -722,5 +736,107 @@ void check_priority(void)
       thread_yield(); /* Current thread must yield */
     }
   }
+}
+
+void
+calculate_load_avg(void)
+{
+  enum intr_level old_level = intr_disable ();
+
+  ready_threads = list_size(&ready_list);
+
+  if(thread_current () != idle_thread)
+  {
+    ready_threads += 1;
+  }
+
+  fixed_point_t quotient = div_fixed_pts(convert_int(59), convert_int(60));
+
+  fixed_point_t product1 = mult_fixed_pts(load_avg, quotient);
+
+  fixed_point_t quotient2 = div_fixed_pts(convert_int(1), convert_int(60));
+
+  fixed_point_t product2 = mult_fixed_pt_int(quotient2, ready_threads);
+
+  load_avg =  add_fixed_pts(product1, product2); 
+
+  intr_set_level (old_level);
+}
+
+void
+calculate_recent_cpu(void)
+{
+  if(thread_current() != idle_thread)
+  {
+    enum intr_level old_level = intr_disable ();
+
+    fixed_point_t product1 = mult_fixed_pt_int(load_avg, 2);
+
+    fixed_point_t sum1 = add_fixed_pt_int(product1, 1);
+
+    fixed_point_t quotient = div_fixed_pts(product1, sum1);
+
+    fixed_point_t sum2 = add_fixed_pt_int(thread_current()->recent_cpu, thread_current()->nice);
+
+    fixed_point_t result = mult_fixed_pts(quotient, sum2);
+
+    thread_current()->recent_cpu = result;
+
+    intr_set_level (old_level);
+  }
+}
+
+void
+increment_recent_cpu(void)
+{
+  enum intr_level old_level = intr_disable ();
+
+  if(thread_current() != idle_thread)
+  {
+    thread_current()->recent_cpu = add_fixed_pt_int(thread_current()->recent_cpu, 1);
+  }
+
+  intr_set_level (old_level);
+}
+
+void
+calculate_priority(void)
+{
+  if(thread_current() != idle_thread)
+  {
+    enum intr_level old_level = intr_disable ();
+
+    fixed_point_t quotient = div_fixed_pt_int(thread_current()->recent_cpu, 4);
+
+    int product = thread_current()->nice * 2;
+
+    fixed_point_t difference1 = sub_fixed_pt_int(quotient, PRI_MAX);
+
+    fixed_point_t difference2 = sub_fixed_pt_int(difference1, product);
+
+    thread_current()->priority = convert_fixed_pt_nearest(difference2);
+
+    if(thread_current()->priority < PRI_MIN)
+    {
+      thread_current()->priority = PRI_MIN;
+    }
+
+    if(thread_current()->priority < PRI_MAX)
+    {
+      thread_current()->priority = PRI_MAX;
+    }
+
+    intr_set_level (old_level);
+  }
+}
+
+void donate_priority(struct thread *donator, struct thread *donatee)
+{
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
+  //check if lock is not being held
+
+  donatee->priority = donator->priority; 
+
+  intr_set_level (old_level);
 }
 /*---------------------------------------------------------------------------------------------*/
