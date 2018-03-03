@@ -136,9 +136,13 @@ void check_priority(void);
 
 void calculate_load_avg(void);
 
-void calculate_recent_cpu(void);
+void calculate_recent_cpu(struct thread *);
+
+void calculate_priority(struct thread *);
 
 void donate_priority(struct thread *, struct thread *);
+
+void reset_priority(struct thread *, struct lock *);
 /*---------------------------------------------------------------------------------------------*/
 
 void thread_init (void);
@@ -172,8 +176,4 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-void donate_priority (struct thread *donator, struct thread *donatee);
-void reset_priority(struct thread *t);
-/*---------------------------------------------------------------------------------------------*/
 #endif /* threads/thread.h */

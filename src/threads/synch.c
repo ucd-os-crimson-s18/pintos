@@ -70,6 +70,16 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+      /*if(!thread_mlfqs)
+      {
+        if(!list_empty(&sema->waiters))
+        {
+          struct thread *t = list_entry (list_begin (&sema->waiters), struct thread, elem);
+
+          donate_priority(thread_current(), t);
+        }
+      }*/
+
       list_insert_ordered(&sema->waiters, &thread_current ()->elem, compare_priority, NULL);
       thread_block ();
     }
@@ -206,11 +216,14 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  if(lock->holder != NULL)
-  { 
-    if(thread_current()->priority > lock->holder->priority)
-    {
-      donate_priority(thread_current(), lock->holder);
+  if(!thread_mlfqs)
+  {
+    if(lock->holder != NULL)
+    { 
+      if(thread_current()->priority > lock->holder->priority)
+      {
+        donate_priority(thread_current(), lock->holder);
+      }
     }
   }
   
@@ -248,12 +261,16 @@ lock_try_acquire (struct lock *lock)
 void
 lock_release (struct lock *lock) 
 {
-  ASSERT (lock != NULL);
-  ASSERT (lock_held_by_current_thread (lock));
+ ASSERT (lock != NULL);
+ ASSERT (lock_held_by_current_thread (lock));
 
-  lock->holder = NULL;
-  reset_priority(thread_current());
-  sema_up (&lock->semaphore);
+ if(!thread_mlfqs)
+ {
+   reset_priority(thread_current(), &lock);
+ }
+
+ lock->holder = NULL;
+ sema_up (&lock->semaphore);
 }
 
 /* Returns true if the current thread holds LOCK, false

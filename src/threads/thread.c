@@ -152,19 +152,16 @@ thread_tick (void)
       {
         enum intr_level old_level = intr_disable ();
         thread_foreach(calculate_recent_cpu, NULL);
+        thread_foreach(calculate_priority, NULL);
         intr_set_level (old_level); /* reset interrupt */
       }
-
-      increment_recent_cpu();
 
       /* PRIORITY Calculation */
       /* Calculated every 4th Clock tick... */
       if((timer_ticks() % 4) == 0)
       {
-        calculate_priority();
+        calculate_priority(thread_current());
       }
-
-
   }
   /*---------------------------------------------------------------------------------------------*/
 
@@ -398,18 +395,18 @@ thread_set_priority (int new_priority)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 
-  if (thread_mlfqs)
+  if (!thread_mlfqs)
   {
-    return;
-  }
   
-  enum intr_level old_level = intr_disable (); /* Disable interrupts */
+    enum intr_level old_level = intr_disable (); /* Disable interrupts */
 
-  thread_current ()->priority = new_priority; /* Sets current thread's priority to new priority */
+    thread_current ()->priority = new_priority; /* Sets current thread's priority to new priority */
 
-  check_priority(); /* Call to check priority function, check if current thread still has highest prio. */
+    check_priority(); /* Call to check priority function, check if current thread still has highest prio. */
 
-  intr_set_level (old_level); /* reset interrupt */
+    intr_set_level (old_level); /* reset interrupt */
+    
+  }
 
   /*---------------------------------------------------------------------------------------------*/
 }
@@ -434,7 +431,7 @@ thread_set_nice (int new_nice)
 
   thread_current ()->nice = new_nice;
 
-  calculate_priority();
+  calculate_priority(thread_current ());
 
   check_priority();
 
@@ -482,7 +479,6 @@ thread_get_recent_cpu (void)
   intr_set_level (old_level); /* reset interrupt */
 
   return recent_cpu_rounded;
-
 
 }
 
@@ -741,33 +737,59 @@ void check_priority(void)
 void donate_priority(struct thread *donator, struct thread *donatee)
 {
   enum intr_level old_level = intr_disable (); /* Disable interrupts */
-  donatee->tmp_priority = donatee->priority;
-  donatee->priority = donator->priority; 
-  intr_set_level (old_level);
+
+  donatee->tmp_priority = donatee->priority; /* Save priority */
+
+  donatee->priority = donator->priority; /* Exchange priorities */
+
+  check_priority(); /* Call to check priority */
+
+  intr_set_level (old_level); /* reset interrupt */
 }
 
-void reset_priority(struct thread* t)
+void reset_priority(struct thread *t, struct lock *lock)
 {
   enum intr_level old_level = intr_disable (); /* Disable interrupts */
+
+  struct thread *waiter;
+
+  struct semaphore *sema = &lock->semaphore;
+
+  /* Get the thread from the waiter list */
+  if(!list_empty(&sema->waiters))
+  {
+    struct thread *waiter = list_entry (list_begin (&sema->waiters), struct thread, elem);
+  }
+  
   /* if tmp_priority is not null, set it to main priority and make tmp NULL*/
   if(t->tmp_priority != NULL)
   {
-    t->priority = t->tmp_priority;
-    t->tmp_priority = NULL;
+    if(waiter != NULL)
+    {
+      t->priority = waiter->priority;
+    }
+    else
+    {
+       t->priority = t->tmp_priority;
+       t->tmp_priority = NULL;
+    } 
+   
+    check_priority(); /* Call to check priority */
   }
   
-  intr_set_level (old_level);
+  intr_set_level (old_level); /* reset interrupt */
 }
+
 void
 calculate_load_avg(void)
 {
-  enum intr_level old_level = intr_disable ();
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
 
-  ready_threads = list_size(&ready_list);
+  ready_threads = list_size(&ready_list); /* Get the amount of ready threads */
 
-  if(thread_current () != idle_thread)
+  if(thread_current () != idle_thread) /* Assure its not the idel thread */
   {
-    ready_threads += 1;
+    ready_threads += 1; /* Increment the amount of ready threads */
   }
 
   fixed_point_t quotient = div_fixed_pts(convert_int(59), convert_int(60));
@@ -780,15 +802,15 @@ calculate_load_avg(void)
 
   load_avg =  add_fixed_pts(product1, product2); 
 
-  intr_set_level (old_level);
+  intr_set_level (old_level);  /* reset interrupt */
 }
 
 void
-calculate_recent_cpu(void)
+calculate_recent_cpu(struct thread *t)
 {
-  if(thread_current() != idle_thread)
+  if(t != idle_thread) /* Assure its not the idel thread */
   {
-    enum intr_level old_level = intr_disable ();
+    enum intr_level old_level = intr_disable (); /* Disable interrupts */
 
     fixed_point_t product1 = mult_fixed_pt_int(load_avg, 2);
 
@@ -796,57 +818,57 @@ calculate_recent_cpu(void)
 
     fixed_point_t quotient = div_fixed_pts(product1, sum1);
 
-    fixed_point_t sum2 = add_fixed_pt_int(thread_current()->recent_cpu, thread_current()->nice);
+    fixed_point_t product2 = mult_fixed_pts(quotient, t->recent_cpu);
 
-    fixed_point_t result = mult_fixed_pts(quotient, sum2);
+    fixed_point_t sum2 = add_fixed_pt_int(product2, t->nice);
 
-    thread_current()->recent_cpu = result;
+    t->recent_cpu = sum2;
 
-    intr_set_level (old_level);
+    intr_set_level (old_level);  /* reset interrupt */
   }
 }
 
 void
 increment_recent_cpu(void)
 {
-  enum intr_level old_level = intr_disable ();
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
 
-  if(thread_current() != idle_thread)
+  if(thread_current() != idle_thread) /* Assure its not the idel thread */
   {
     thread_current()->recent_cpu = add_fixed_pt_int(thread_current()->recent_cpu, 1);
   }
 
-  intr_set_level (old_level);
+  intr_set_level (old_level);  /* reset interrupt */
 }
 
 void
-calculate_priority(void)
+calculate_priority(struct thread *t)
 {
-  if(thread_current() != idle_thread)
+  if(thread_current() != idle_thread) /* Assure its not the idel thread */
   {
-    enum intr_level old_level = intr_disable ();
+    enum intr_level old_level = intr_disable (); /* Disable interrupts */
 
-    fixed_point_t quotient = div_fixed_pt_int(thread_current()->recent_cpu, 4);
+    fixed_point_t quotient = div_fixed_pt_int(t->recent_cpu, 4);
 
-    int product = thread_current()->nice * 2;
+    int product = t->nice * 2;
 
     fixed_point_t difference1 = sub_fixed_pt_int(quotient, PRI_MAX);
 
     fixed_point_t difference2 = sub_fixed_pt_int(difference1, product);
 
-    thread_current()->priority = convert_fixed_pt_nearest(difference2);
+    t->priority = convert_fixed_pt(difference2);
 
-    if(thread_current()->priority < PRI_MIN)
+    if(t->priority < PRI_MIN)
     {
-      thread_current()->priority = PRI_MIN;
+      t->priority = PRI_MIN;
     }
 
-    if(thread_current()->priority < PRI_MAX)
+    if(t->priority < PRI_MAX)
     {
-      thread_current()->priority = PRI_MAX;
+      t->priority = PRI_MAX;
     }
 
-    intr_set_level (old_level);
+    intr_set_level (old_level);  /* reset interrupt */
   }
 }
 /*---------------------------------------------------------------------------------------------*/
