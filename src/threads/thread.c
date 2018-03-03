@@ -701,7 +701,7 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
-
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 void check_priority(void)
 {
   if(thread_current() != idle_thread) /* Checking that current thread isnt the idle thread */
@@ -715,7 +715,7 @@ void check_priority(void)
 
     struct thread *t = list_entry (list, struct thread, elem); /* Get the thread from the ready list */
 
-    int curr_priority = thread_current()->priority;
+    int curr_priority = thread_current()->priority; /* Get the priority from current thread */
 
     if(t->priority > curr_priority) /* Check if the priority is greater then current thread */
     {
@@ -723,3 +723,4 @@ void check_priority(void)
     }
   }
 }
+/*---------------------------------------------------------------------------------------------*/
