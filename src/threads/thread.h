@@ -4,6 +4,8 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/fixed-point.h"
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -23,6 +25,12 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+#define NICE_MIN -20                    /* Minimum nice value */
+#define NICE_DEFAULT 0                  /* Default nice value */
+#define NICE_MAX 20                     /* Maximum nice value */
+/*---------------------------------------------------------------------------------------------*/
 
 /* A kernel thread or user process.
 
@@ -90,6 +98,15 @@ struct thread
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+    struct semaphore thread_sema;  /* Thread's semaphore*/
+    struct list_elem blocked_elem; /* List element for blocked threads */
+    struct list_elem priority_elem;
+    int nice;                      /*How nice the thread should be to others. */
+    int64_t alarm_clock;           /* Time for thread to wake up */
+    fixed_point_t recent_cpu;      /*CPU time thread has received recently */
+    /*---------------------------------------------------------------------------------------------*/
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -106,6 +123,19 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+/* List of all threads in THREAD_BLOCKED state, waiting to be
+ * awakened by the interrupt handler */
+//extern struct list blocked_list;
+/*---------------------------------------------------------------------------------------------*/
+
+extern struct list blocked_list; /* Declare blocked_list to store blocked threads */
+
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+/* list less style function to use for priority comparison */
+bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED);
+/*---------------------------------------------------------------------------------------------*/
 
 void thread_init (void);
 void thread_start (void);
