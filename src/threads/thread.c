@@ -60,8 +60,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
 
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-static fixed_point_t load_avg;
-static size_t ready_threads;
+static size_t ready_threads;  /* Declare ready threads for mlfqs calculations */
 /*---------------------------------------------------------------------------------------------*/
 
 /* If false (default), use round-robin scheduler.
@@ -88,7 +87,14 @@ bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED
   struct thread *thread_A = list_entry (A, struct thread, elem);
   struct thread *thread_B = list_entry (B, struct thread, elem);
 
-  return thread_A->priority > thread_B->priority;
+  if(thread_A->priority > thread_B->priority)
+  {
+    return true;
+  }
+  else 
+  {
+    return false;
+  }
 }
 /*---------------------------------------------------------------------------------------------*/
 
@@ -167,11 +173,20 @@ thread_tick (void)
       {
         ready_threads = list_size(&ready_list);
 
-        fixed_point_t product1 = mult_fixed_pt_int(load_avg, (59/60));
+        if(thread_current != idle_thread)
+        {
+          ready_threads += 1;
+        }
 
-        int product2 = (1/60) * ready_threads;
+        fixed_point_t quotient = div_fixed_pts(convert_int(59), convert_int(60));
 
-        load_avg =  add_fixed_pt_int(product1, product2); 
+        fixed_point_t product1 = mult_fixed_pts(load_avg, quotient);
+
+        fixed_point_t quotient2 = div_fixed_pts(convert_int(1), convert_int(60));
+
+        fixed_point_t product2 = mult_fixed_pt_int(quotient2, ready_threads);
+
+        load_avg =  add_fixed_pts(product1, product2); 
       }
 
       /* RECENT CPU Calculation */
@@ -268,6 +283,14 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
+
+  check_priority(); /* Check if current thread needs to yield */
+
+  intr_set_level (old_level); /* reset interrupt */
+/*---------------------------------------------------------------------------------------------*/
+
   return tid;
 }
 
@@ -305,21 +328,11 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-
-  /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-  list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL); /* Insert thread into ready list in order */
+  
+  /* Insert thread into ready list in order */
+  list_insert_ordered (&ready_list, &t->elem, compare_priority, NULL); 
+ 
   t->status = THREAD_READY; /* Change status to ready */
-
-  if(thread_current() != idle_thread) /* Checking that current thread isnt the idle thread */
-  {
-    int curr_priority = thread_get_priority(); /* Get the current thread's priority */
-
-    if(t->priority > curr_priority) /* Check if the priority is greater then current thread */
-    {
-      thread_yield(); /* Current thread must yield */
-    }
-  }
-  /*---------------------------------------------------------------------------------------------*/
 
   intr_set_level (old_level);
 }
@@ -419,19 +432,14 @@ thread_set_priority (int new_priority)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 
-  struct list_elem *list = list_begin(&ready_list); /* Declare a list element */
-
-  struct thread *t = list_entry (list, struct thread, elem); /* Get the thread from the ready list */
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
 
   thread_current ()->priority = new_priority; /* Sets current thread's priority to new priority */
 
-  int curr_priority = thread_get_priority(); /* Get the current thread's priority */
+  check_priority(); /* Call to check priority function, check if current thread still has highest prio. */
 
-  /* Checking if current thread no longer has the highest priority */
-  if(t->priority > curr_priority) 
-  {
-    thread_yield(); /* Current thread must yield */
-  }
+  intr_set_level (old_level); /* reset interrupt */
+
   /*---------------------------------------------------------------------------------------------*/
 }
 
@@ -439,7 +447,11 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void)
 {
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
+
   return thread_current ()->priority; /* return thread's priority */
+
+    intr_set_level (old_level); /* reset interrupt */
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -464,7 +476,6 @@ int
 thread_get_load_avg (void)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-
   return  convert_fixed_pt_nearest(mult_fixed_pt_int(load_avg, 100));
 }
 
@@ -473,7 +484,6 @@ int
 thread_get_recent_cpu (void)
 {
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-
   return convert_fixed_pt_nearest(mult_fixed_pt_int((thread_current()->recent_cpu), 100));
 
 }
@@ -568,6 +578,8 @@ init_thread (struct thread *t, const char *name, int priority)
 
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
   sema_init (&t->thread_sema, 0); /* initialize the thread semaphore to 0 */
+  t->nice = NICE_DEFAULT; /* initialize nice */
+  //t->recent_cpu = 0;  /* initialize recent cpu */
 /*---------------------------------------------------------------------------------------------*/
 
   old_level = intr_disable ();
@@ -688,3 +700,26 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+void check_priority(void)
+{
+  if(thread_current() != idle_thread) /* Checking that current thread isnt the idle thread */
+  {
+    if(list_empty(&ready_list))
+    {
+      return;
+    }
+
+    struct list_elem *list = list_begin(&ready_list); /* Declare a list element */
+
+    struct thread *t = list_entry (list, struct thread, elem); /* Get the thread from the ready list */
+
+    int curr_priority = thread_current()->priority;
+
+    if(t->priority > curr_priority) /* Check if the priority is greater then current thread */
+    {
+      thread_yield(); /* Current thread must yield */
+    }
+  }
+}

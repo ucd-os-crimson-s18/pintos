@@ -103,6 +103,7 @@ struct thread
     struct list_elem blocked_elem; /* List element for blocked threads */
     struct list_elem priority_elem;
     int nice;                      /*How nice the thread should be to others. */
+    /* move this???? */
     int64_t alarm_clock;           /* Time for thread to wake up */
     fixed_point_t recent_cpu;      /*CPU time thread has received recently */
     /*---------------------------------------------------------------------------------------------*/
@@ -124,6 +125,8 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
+static fixed_point_t load_avg;
+
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 /* List of all threads in THREAD_BLOCKED state, waiting to be
  * awakened by the interrupt handler */
@@ -135,6 +138,8 @@ extern struct list blocked_list; /* Declare blocked_list to store blocked thread
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 /* list less style function to use for priority comparison */
 bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED);
+
+void check_priority(void);
 /*---------------------------------------------------------------------------------------------*/
 
 void thread_init (void);
