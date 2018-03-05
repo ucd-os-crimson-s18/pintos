@@ -101,9 +101,7 @@ struct thread
     /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
     struct semaphore thread_sema;  /* Thread's semaphore*/
     struct list_elem blocked_elem; /* List element for blocked threads */
-    struct list_elem priority_elem;
     int nice;                      /*How nice the thread should be to others. */
-    /* move this???? */
     int64_t alarm_clock;           /* Time for thread to wake up */
     fixed_point_t recent_cpu;      /*CPU time thread has received recently */
     int tmp_priority;              /* Holds original priority before donation */
@@ -129,17 +127,13 @@ extern bool thread_mlfqs;
 static fixed_point_t load_avg;
 
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
-/* List of all threads in THREAD_BLOCKED state, waiting to be
- * awakened by the interrupt handler */
-//extern struct list blocked_list;
-/*---------------------------------------------------------------------------------------------*/
-
+/* List of all threads in THREAD_BLOCKED state, waiting to be awakened by the interrupt handler */
 extern struct list blocked_list; /* Declare blocked_list to store blocked threads */
 
-/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 /* list less style function to use for priority comparison */
 bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED);
 
+/* Function to check whether the current thread should yield to a new thread depending on priority */
 void check_priority(void);
 /*---------------------------------------------------------------------------------------------*/
 
