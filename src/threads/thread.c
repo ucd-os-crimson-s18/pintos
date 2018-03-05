@@ -29,7 +29,7 @@
 static struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
-   when they are first scheduled and removed when they exit. */
+   when they are first schedule and removed when they exit. */
 static struct list all_list;
 
 /* Idle thread. */
@@ -696,7 +696,7 @@ allocate_tid (void)
 
   return tid;
 }
-
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
@@ -722,4 +722,25 @@ void check_priority(void)
       thread_yield(); /* Current thread must yield */
     }
   }
+}
+
+void donate_priority(struct thread *donator, struct thread *donatee)
+{
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
+  donatee->tmp_priority = donatee->priority;
+  donatee->priority = donator->priority; 
+  intr_set_level (old_level);
+}
+
+void reset_priority(struct thread* t)
+{
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
+  /* if tmp_priority is not null, set it to main priority and make tmp NULL*/
+  if(t->tmp_priority != NULL)
+  {
+    t->priority = t->tmp_priority;
+    t->tmp_priority = NULL;
+  }
+  
+  intr_set_level (old_level);
 }

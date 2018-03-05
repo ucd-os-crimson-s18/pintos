@@ -106,6 +106,7 @@ struct thread
     /* move this???? */
     int64_t alarm_clock;           /* Time for thread to wake up */
     fixed_point_t recent_cpu;      /*CPU time thread has received recently */
+    int tmp_priority;              /* Holds original priority before donation */
     /*---------------------------------------------------------------------------------------------*/
 
     /* Shared between thread.c and synch.c. */
@@ -173,4 +174,8 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
+void donate_priority (struct thread *donator, struct thread *donatee);
+void reset_priority(struct thread *t);
+/*---------------------------------------------------------------------------------------------*/
 #endif /* threads/thread.h */
