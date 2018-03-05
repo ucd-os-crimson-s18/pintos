@@ -108,7 +108,7 @@ timer_sleep (int64_t ticks)
 
   /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
   //Shouldn't need this because sema_down disables interrupts? 
-  //enum intr_level old_level = intr_disable (); /* Disable interrupts */
+  enum intr_level old_level = intr_disable (); /* Disable interrupts */
 
   struct thread *t = thread_current();  /* Declare a temporary thread set to current thread */
 
@@ -119,7 +119,7 @@ timer_sleep (int64_t ticks)
 
   sema_down(&t->thread_sema);   /* Block the thread until alarm clock*/
 
-  //intr_set_level (old_level); /* Set interrupt level */
+  intr_set_level (old_level); /* Set interrupt level */
 
   /*---------------------------------------------------------------------------------------------*/
 }
@@ -219,6 +219,7 @@ struct list_elem *list = list_begin(&blocked_list); /* Declare a list element */
         list = list_next (list); /* else go to next thread */
       }
   }
+
   /*---------------------------------------------------------------------------------------------*/
 
 }

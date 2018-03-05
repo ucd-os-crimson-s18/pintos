@@ -124,8 +124,6 @@ struct thread
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
 
-static fixed_point_t load_avg;
-
 /*----------------------------------- ADDED BY CRIMSON TEAM -----------------------------------*/
 /* List of all threads in THREAD_BLOCKED state, waiting to be awakened by the interrupt handler */
 extern struct list blocked_list; /* Declare blocked_list to store blocked threads */
@@ -135,6 +133,12 @@ bool compare_priority(struct list_elem *A, struct list_elem *B, void *aux UNUSED
 
 /* Function to check whether the current thread should yield to a new thread depending on priority */
 void check_priority(void);
+
+void calculate_load_avg(void);
+
+void calculate_recent_cpu(void);
+
+void donate_priority(struct thread *, struct thread *);
 /*---------------------------------------------------------------------------------------------*/
 
 void thread_init (void);
