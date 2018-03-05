@@ -849,14 +849,4 @@ calculate_priority(void)
     intr_set_level (old_level);
   }
 }
-
-void donate_priority(struct thread *donator, struct thread *donatee)
-{
-  enum intr_level old_level = intr_disable (); /* Disable interrupts */
-  //check if lock is not being held
-
-  donatee->priority = donator->priority; 
-
-  intr_set_level (old_level);
-}
 /*---------------------------------------------------------------------------------------------*/
